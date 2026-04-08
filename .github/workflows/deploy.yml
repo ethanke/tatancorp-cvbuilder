@@ -27,12 +27,17 @@ jobs:
     with:
       app-name: tatancorp-cvbuilder
       env-file: |
+        NEXT_PUBLIC_APP_URL=https://cvbuilder.tatancorp.xyz
+        NODE_ENV=production
+    secrets:
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      CPANEL_HOST: ${{ secrets.CPANEL_HOST }}
+      CPANEL_USERNAME: ${{ secrets.CPANEL_USERNAME }}
+      SSH_PORT: ${{ secrets.SSH_PORT }}
+      ENV_SECRETS: |-
         OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}
         NEXT_PUBLIC_BACKEND_URL=${{ secrets.NEXT_PUBLIC_BACKEND_URL }}
         BACKEND_URL=${{ secrets.NEXT_PUBLIC_BACKEND_URL }}
-        NEXT_PUBLIC_APP_URL=https://cvbuilder.tatancorp.xyz
-        NODE_ENV=production
-    secrets: inherit
 
   report-failure:
     needs: [test, deploy]
@@ -41,4 +46,5 @@ jobs:
     with:
       failed-job: ${{ needs.test.result == 'failure' && 'test' || 'deploy' }}
       fix-instructions: "Fix the failing CI. Run npm test and npm run build to reproduce. Check vitest test output and Next.js build errors. Push a fix to a new branch and open a PR."
-    secrets: inherit
+    secrets:
+      PERSO_GITHUB_TOKEN: ${{ secrets.PERSO_GITHUB_TOKEN }}
