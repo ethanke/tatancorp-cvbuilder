@@ -47,25 +47,43 @@ For unknown contact values, use empty string. Write strong, achievement-focused 
 export async function POST(req: NextRequest) {
   const cookie = req.headers.get("cookie") ?? "";
   const user = await getUser(cookie);
-  if (!user) return NextResponse.json({ error: "not authenticated" }, { status: 401 });
 
-  const plan = await getUserPlan(cookie);
-  if (plan !== "monthly" && plan !== "annual") {
-    const credits = await getUserAiCredits(cookie);
-    if (credits.remaining <= 0) {
-      return NextResponse.json(
-        { error: "credits exhausted", code: "ai_credits_exhausted" },
-        { status: 402 }
-      );
+  let rateLimitKey: string;
+
+  if (!user) {
+    // Guest path: allow one free generation, rate-limited by IP
+    const ip =
+      req.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
+      req.headers.get("x-real-ip") ??
+      "unknown";
+    rateLimitKey = `ip:${ip}`;
+    const now = Date.now();
+    const last = rateLimitMap.get(rateLimitKey) ?? 0;
+    if (now - last < RATE_LIMIT_MS) {
+      return NextResponse.json({ error: "Rate limited — please wait 10 seconds" }, { status: 429 });
     }
-  }
+    rateLimitMap.set(rateLimitKey, now);
+  } else {
+    // Authenticated path: check plan / credits then rate-limit by user id
+    const plan = await getUserPlan(cookie);
+    if (plan !== "monthly" && plan !== "annual") {
+      const credits = await getUserAiCredits(cookie);
+      if (credits.remaining <= 0) {
+        return NextResponse.json(
+          { error: "credits exhausted", code: "ai_credits_exhausted" },
+          { status: 402 }
+        );
+      }
+    }
 
-  const now = Date.now();
-  const last = rateLimitMap.get(user.id) ?? 0;
-  if (now - last < RATE_LIMIT_MS) {
-    return NextResponse.json({ error: "Rate limited — please wait 10 seconds" }, { status: 429 });
+    rateLimitKey = user.id;
+    const now = Date.now();
+    const last = rateLimitMap.get(rateLimitKey) ?? 0;
+    if (now - last < RATE_LIMIT_MS) {
+      return NextResponse.json({ error: "Rate limited — please wait 10 seconds" }, { status: 429 });
+    }
+    rateLimitMap.set(rateLimitKey, now);
   }
-  rateLimitMap.set(user.id, now);
 
   const body = await req.json();
   const bio = String(body.bio ?? "").slice(0, 2000).trim();
