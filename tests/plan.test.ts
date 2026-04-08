@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { getUserPlan } from "../lib/plan";
+import { getUserPlan, isPro } from "../lib/plan";
 
 // Mock global fetch
 const mockFetch = vi.fn();
@@ -7,6 +7,24 @@ vi.stubGlobal("fetch", mockFetch);
 
 beforeEach(() => {
   mockFetch.mockReset();
+});
+
+describe("isPro", () => {
+  it("returns true for 'pro'", () => {
+    expect(isPro("pro")).toBe(true);
+  });
+
+  it("returns true for 'monthly'", () => {
+    expect(isPro("monthly")).toBe(true);
+  });
+
+  it("returns true for 'annual'", () => {
+    expect(isPro("annual")).toBe(true);
+  });
+
+  it("returns false for 'free'", () => {
+    expect(isPro("free")).toBe(false);
+  });
 });
 
 describe("getUserPlan", () => {
@@ -21,6 +39,24 @@ describe("getUserPlan", () => {
     // Verify cookie was forwarded
     const call = mockFetch.mock.calls[0];
     expect(call[1].headers.cookie).toBe("tc_session=abc123");
+  });
+
+  it("returns 'monthly' when backend says monthly", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ plan: "monthly" }),
+    });
+    const plan = await getUserPlan("tc_session=abc123");
+    expect(plan).toBe("monthly");
+  });
+
+  it("returns 'annual' when backend says annual", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ plan: "annual" }),
+    });
+    const plan = await getUserPlan("tc_session=abc123");
+    expect(plan).toBe("annual");
   });
 
   it("returns 'free' when backend says free", async () => {

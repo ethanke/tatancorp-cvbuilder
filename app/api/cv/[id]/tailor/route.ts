@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { extractJson } from "@/lib/extract-json";
 import type { CVContent } from "@/lib/types";
-import { getUserPlan, getUserAiCredits } from "@/lib/plan";
+import { getUserPlan, getUserAiCredits, isPro } from "@/lib/plan";
 
 const BACKEND = process.env.BACKEND_URL ?? "https://tatancorp.xyz/tatancorp-backend";
 const openai = new OpenAI({
@@ -35,7 +35,7 @@ export async function POST(
   if (!user) return NextResponse.json({ error: "not authenticated" }, { status: 401 });
 
   const plan = await getUserPlan(cookie);
-  if (plan !== "pro") {
+  if (!isPro(plan)) {
     const credits = await getUserAiCredits(cookie);
     if (credits.remaining <= 0) {
       return NextResponse.json(
