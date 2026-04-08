@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { CVContent, CV } from "../lib/types";
+import type { CVContent, CV, CoverLetter } from "../lib/types";
 import { EMPTY_CV_CONTENT } from "../lib/types";
 
 describe("types", () => {
@@ -40,5 +40,26 @@ describe("types", () => {
     expect(cv.id).toBe("test-id");
     expect(cv.content.name).toBe("");
     expect(cv.is_public).toBe(false);
+  });
+
+  it("CoverLetter type has required fields", () => {
+    const letter: CoverLetter = {
+      greeting: "Dear Hiring Manager,",
+      paragraphs: ["First paragraph.", "Second paragraph.", "Third paragraph."],
+      closing: "Sincerely, John Doe",
+    };
+    expect(letter.greeting).toBe("Dear Hiring Manager,");
+    expect(letter.paragraphs).toHaveLength(3);
+    expect(letter.closing).toBe("Sincerely, John Doe");
+  });
+
+  it("CoverLetter paragraphs is an array of strings", () => {
+    const letter: CoverLetter = {
+      greeting: "Hello,",
+      paragraphs: ["Para 1", "Para 2"],
+      closing: "Best regards",
+    };
+    expect(Array.isArray(letter.paragraphs)).toBe(true);
+    letter.paragraphs.forEach((p) => expect(typeof p).toBe("string"));
   });
 });

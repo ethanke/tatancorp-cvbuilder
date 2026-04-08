@@ -193,6 +193,12 @@ export default function BuilderEditor() {
                     ⌖ Tailor to job {plan === "free" && <span className="text-zinc-500">(Pro)</span>}
                 </button>
                 <button
+                    onClick={() => router.push(`/builder/${id}/cover-letter`)}
+                    className="shrink-0 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs font-medium hover:bg-zinc-800 transition"
+                >
+                    ✦ Cover Letter {plan === "free" && <span className="text-zinc-500">(Pro)</span>}
+                </button>
+                <button
                     onClick={() => window.print()}
                     className="shrink-0 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-black hover:bg-emerald-400 transition"
                 >
