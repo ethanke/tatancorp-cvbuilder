@@ -5,7 +5,7 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const session = request.cookies.get("tc_session");
 
-  if (!session && (pathname.startsWith("/dashboard") || pathname.startsWith("/builder"))) {
+  if (!session && (pathname.startsWith("/dashboard") || (pathname.startsWith("/builder") && pathname !== "/builder/new"))) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 
