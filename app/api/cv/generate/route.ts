@@ -47,19 +47,26 @@ For unknown contact values, use empty string. Write strong, achievement-focused 
 export async function POST(req: NextRequest) {
   const cookie = req.headers.get("cookie") ?? "";
   const user = await getUser(cookie);
-  if (!user) return NextResponse.json({ error: "not authenticated" }, { status: 401 });
 
-  const plan = await getUserPlan(cookie);
-  if (plan !== "pro") {
-    return NextResponse.json({ error: "AI features require Pro. Upgrade for a one-time fee.", code: "PLAN_REQUIRED" }, { status: 403 });
+  // Authenticated users must have the pro plan to use AI generation
+  if (user) {
+    const plan = await getUserPlan(cookie);
+    if (plan !== "pro") {
+      return NextResponse.json({ error: "AI features require Pro. Upgrade for a one-time fee.", code: "PLAN_REQUIRED" }, { status: 403 });
+    }
   }
 
+  // Rate-limit by user ID for authenticated users, or by IP for guests
+  const rateLimitKey = user
+    ? user.id
+    : (req.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? req.headers.get("x-real-ip") ?? "guest");
+
   const now = Date.now();
-  const last = rateLimitMap.get(user.id) ?? 0;
+  const last = rateLimitMap.get(rateLimitKey) ?? 0;
   if (now - last < RATE_LIMIT_MS) {
     return NextResponse.json({ error: "Rate limited — please wait 10 seconds" }, { status: 429 });
   }
-  rateLimitMap.set(user.id, now);
+  rateLimitMap.set(rateLimitKey, now);
 
   const body = await req.json();
   const bio = String(body.bio ?? "").slice(0, 2000).trim();
