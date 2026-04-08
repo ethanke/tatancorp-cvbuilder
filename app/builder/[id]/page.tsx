@@ -57,6 +57,7 @@ export default function BuilderEditor() {
     const [tailoring, setTailoring] = useState(false);
     const [tailorError, setTailorError] = useState("");
     const [plan, setPlan] = useState<"free" | "pro" | null>(null);
+    const [shareToast, setShareToast] = useState(false);
     const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
@@ -123,6 +124,27 @@ export default function BuilderEditor() {
         }
     };
 
+    const handleShare = async () => {
+        const publicUrl = `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://cvbuilder.tatancorp.xyz"}/cv/${id}`;
+        try {
+            if (!cv?.is_public) {
+                const patchRes = await fetch(`${BACKEND}/cv/${id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "include",
+                    body: JSON.stringify({ is_public: true }),
+                });
+                if (!patchRes.ok) throw new Error("Failed to make CV public");
+                setCv((prev) => prev ? { ...prev, is_public: true } : prev);
+            }
+            await navigator.clipboard.writeText(publicUrl);
+            setShareToast(true);
+            setTimeout(() => setShareToast(false), 3000);
+        } catch {
+            // silently ignore share errors
+        }
+    };
+
     if (!cv || !content) {
         return (
             <div className="flex items-center justify-center min-h-[60vh]">
@@ -158,6 +180,12 @@ export default function BuilderEditor() {
                     }`}>
                     {saveStatus === "saved" ? "✓ Saved" : saveStatus === "saving" ? "Saving…" : "Unsaved"}
                 </span>
+                <button
+                    onClick={handleShare}
+                    className="shrink-0 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs font-medium hover:bg-zinc-800 transition"
+                >
+                    ↗ Share
+                </button>
                 <button
                     onClick={() => setTailorOpen(true)}
                     className="shrink-0 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs font-medium hover:bg-zinc-800 transition"
@@ -328,6 +356,13 @@ export default function BuilderEditor() {
                             </button>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* ── Share toast ───────────────────────────────────────── */}
+            {shareToast && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-xl bg-zinc-800 border border-zinc-700 px-5 py-3 text-sm text-white shadow-2xl">
+                    🔗 Link copied!
                 </div>
             )}
         </div>
