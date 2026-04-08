@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { extractJson } from "@/lib/extract-json";
+import type { CVContent } from "@/lib/types";
 
 const BACKEND = process.env.BACKEND_URL ?? "https://tatancorp.xyz/tatancorp-backend";
 const openai = new OpenAI({
@@ -65,7 +66,7 @@ Return ONLY valid JSON with the same schema as the input CV (name, tagline, cont
       ],
       max_tokens: 2500,
     });
-    const tailoredCv = extractJson(completion.choices[0].message.content ?? "{}");
+    const tailoredCv = extractJson(completion.choices[0].message.content ?? "{}") as CVContent;
 
     // Save the tailored version as a new CV in the backend
     const saveRes = await fetch(`${BACKEND}/cv`, {
