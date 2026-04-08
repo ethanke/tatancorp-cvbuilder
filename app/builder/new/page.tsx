@@ -50,7 +50,9 @@ export default function NewCV() {
                             setGuestCv(parsed.content ?? null);
                         }
                     } catch {
-                        // ignore malformed storage
+                        // Corrupted data — clear it so the user isn't stuck
+                        localStorage.removeItem(GUEST_CV_KEY);
+                        localStorage.removeItem(GUEST_GENERATED_KEY);
                     }
                 }
             })
@@ -204,28 +206,17 @@ export default function NewCV() {
                         </p>
                     </div>
 
-                    {/* Download button with signup gate overlay */}
-                    <div className="relative inline-flex w-fit">
+                    {/* Download button — sign up gate */}
+                    <div>
                         <button
-                            disabled
-                            aria-hidden="true"
-                            className="rounded-xl bg-emerald-500 px-7 py-3 text-sm font-semibold text-black opacity-40 blur-[1px] cursor-not-allowed select-none"
+                            onClick={() => setShowSignupModal(true)}
+                            className="rounded-xl bg-emerald-500 px-7 py-3 text-sm font-semibold text-black transition hover:bg-emerald-400 shadow"
+                            aria-label="Sign up to download your CV as PDF"
                         >
-                            ⤓ Download PDF
+                            🔒 Sign up to download PDF
                         </button>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                            <button
-                                onClick={() => setShowSignupModal(true)}
-                                className="rounded-xl bg-emerald-500 px-7 py-3 text-sm font-semibold text-black transition hover:bg-emerald-400 whitespace-nowrap shadow-lg"
-                            >
-                                🔒 Sign up to download
-                            </button>
-                        </div>
+                        <p className="text-xs text-zinc-500 mt-2">Free account — no credit card required</p>
                     </div>
-
-                    <p className="text-xs text-zinc-500 -mt-3">
-                        Free account — no credit card required
-                    </p>
 
                     <CvPreview cv={guestCv} />
                 </div>

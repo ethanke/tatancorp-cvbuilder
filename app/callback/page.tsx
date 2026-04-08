@@ -44,7 +44,8 @@ export default function CallbackPage() {
 
                 setStatus("done");
                 router.replace(`/builder/${id}`);
-            } catch {
+            } catch (e) {
+                console.error("Failed to migrate guest CV:", e);
                 setStatus("error");
                 router.replace("/dashboard");
             }
