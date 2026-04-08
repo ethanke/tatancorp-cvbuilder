@@ -10,11 +10,11 @@ export async function GET(req: NextRequest) {
       cache: "no-store",
     });
     if (!res.ok) {
-      return NextResponse.json({ remaining: 0, total: 3 }, { status: res.status });
+      return NextResponse.json({ error: "Failed to fetch credits" }, { status: 502 });
     }
     const data = await res.json();
     return NextResponse.json(data);
   } catch {
-    return NextResponse.json({ remaining: 0, total: 3 }, { status: 500 });
+    return NextResponse.json({ error: "Failed to fetch credits" }, { status: 500 });
   }
 }
