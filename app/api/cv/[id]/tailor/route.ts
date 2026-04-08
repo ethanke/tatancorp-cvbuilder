@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { extractJson } from "@/lib/extract-json";
 import type { CVContent } from "@/lib/types";
-import { getUserPlan } from "@/lib/plan";
+import { getUserPlan, getUserAiCredits } from "@/lib/plan";
 
 const BACKEND = process.env.BACKEND_URL ?? "https://tatancorp.xyz/tatancorp-backend";
 const openai = new OpenAI({
@@ -36,7 +36,13 @@ export async function POST(
 
   const plan = await getUserPlan(cookie);
   if (plan !== "monthly" && plan !== "annual") {
-    return NextResponse.json({ error: "AI features require a Pro subscription ($5/month or $49/year).", code: "PLAN_REQUIRED" }, { status: 403 });
+    const credits = await getUserAiCredits(cookie);
+    if (credits.remaining <= 0) {
+      return NextResponse.json(
+        { error: "credits exhausted", code: "ai_credits_exhausted" },
+        { status: 402 }
+      );
+    }
   }
 
   const now = Date.now();

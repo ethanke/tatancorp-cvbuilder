@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { extractJson } from "@/lib/extract-json";
-import { getUserPlan } from "@/lib/plan";
+import { getUserPlan, getUserAiCredits } from "@/lib/plan";
 
 const BACKEND = process.env.BACKEND_URL ?? "https://tatancorp.xyz/tatancorp-backend";
 const openai = new OpenAI({
@@ -30,8 +30,14 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "not authenticated" }, { status: 401 });
 
   const plan = await getUserPlan(cookie);
-  if (plan !== "pro") {
-    return NextResponse.json({ error: "AI features require Pro. Upgrade for a one-time fee.", code: "PLAN_REQUIRED" }, { status: 403 });
+  if (plan !== "monthly" && plan !== "annual") {
+    const credits = await getUserAiCredits(cookie);
+    if (credits.remaining <= 0) {
+      return NextResponse.json(
+        { error: "credits exhausted", code: "ai_credits_exhausted" },
+        { status: 402 }
+      );
+    }
   }
 
   const now = Date.now();

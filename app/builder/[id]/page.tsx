@@ -3,6 +3,8 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import type { CV, CVContent, CVExperience, CVEducation, CVProject } from "@/lib/types";
 import CvPreview from "@/app/components/CvPreview";
+import CreditsDisplay from "@/app/components/CreditsDisplay";
+import UpgradeModal from "@/app/components/UpgradeModal";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? "https://tatancorp.xyz/tatancorp-backend";
 
@@ -56,7 +58,9 @@ export default function BuilderEditor() {
     const [jobDesc, setJobDesc] = useState("");
     const [tailoring, setTailoring] = useState(false);
     const [tailorError, setTailorError] = useState("");
-    const [plan, setPlan] = useState<"free" | "pro" | null>(null);
+    const [plan, setPlan] = useState<"free" | "monthly" | "annual" | null>(null);
+    const [credits, setCredits] = useState<{ remaining: number; total: number } | null>(null);
+    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
     const [shareToast, setShareToast] = useState(false);
     const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -68,9 +72,25 @@ export default function BuilderEditor() {
 
         fetch(`${BACKEND}/payments/status`, { credentials: "include" })
             .then((r) => (r.ok ? r.json() : Promise.reject()))
-            .then((data) => setPlan(data.plan ?? "free"))
+            .then((data) => {
+                const p = data.plan;
+                if (p === "monthly" || p === "annual") {
+                    setPlan(p);
+                } else {
+                    setPlan("free");
+                }
+            })
             .catch(() => setPlan("free"));
     }, [id, router]);
+
+    useEffect(() => {
+        if (plan === "free") {
+            fetch("/api/credits")
+                .then((r) => (r.ok ? r.json() : Promise.reject()))
+                .then((data) => setCredits({ remaining: data.remaining, total: data.total }))
+                .catch(() => setCredits({ remaining: 0, total: 3 }));
+        }
+    }, [plan]);
 
     const doSave = useCallback((c: CVContent) => {
         setSaveStatus("saving");
@@ -107,8 +127,13 @@ export default function BuilderEditor() {
             });
             const data = await res.json();
             if (!res.ok) {
+                if (data.code === "ai_credits_exhausted") {
+                    setShowUpgradeModal(true);
+                    setTailoring(false);
+                    return;
+                }
                 if (data.code === "PLAN_REQUIRED") {
-                    setTailorError("AI features require Pro — upgrade from your dashboard for $9.");
+                    setShowUpgradeModal(true);
                     setTailoring(false);
                     return;
                 }
@@ -158,6 +183,7 @@ export default function BuilderEditor() {
 
     return (
         <div className="flex flex-col h-[calc(100vh-65px)]">
+            {showUpgradeModal && <UpgradeModal onClose={() => setShowUpgradeModal(false)} />}
             {/* ── Top bar ───────────────────────────────────────────────── */}
             <div className="print:hidden flex items-center gap-4 px-6 py-3 border-b border-zinc-800 bg-[#09090b]/80 backdrop-blur-md shrink-0">
                 <div className="flex-1 min-w-0">
@@ -175,6 +201,9 @@ export default function BuilderEditor() {
                         className="bg-transparent text-sm font-semibold text-white w-full focus:outline-none truncate"
                     />
                 </div>
+                {plan === "free" && credits !== null && (
+                    <CreditsDisplay remaining={credits.remaining} total={credits.total} />
+                )}
                 <span className={`text-xs shrink-0 ${saveStatus === "saved" ? "text-emerald-500" :
                         saveStatus === "saving" ? "text-zinc-400" : "text-amber-400"
                     }`}>
@@ -190,7 +219,7 @@ export default function BuilderEditor() {
                     onClick={() => setTailorOpen(true)}
                     className="shrink-0 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs font-medium hover:bg-zinc-800 transition"
                 >
-                    ⌖ Tailor to job {plan === "free" && <span className="text-zinc-500">(Pro)</span>}
+                    ⌖ Tailor to job {plan === "free" && credits !== null && credits.remaining <= 0 && <span className="text-zinc-500">(no credits)</span>}
                 </button>
                 <button
                     onClick={() => router.push(`/builder/${id}/cover-letter`)}

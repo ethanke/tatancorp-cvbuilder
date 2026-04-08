@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import type { CV } from "@/lib/types";
+import CreditsDisplay from "@/app/components/CreditsDisplay";
+import UpgradeModal from "@/app/components/UpgradeModal";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? "https://tatancorp.xyz/tatancorp-backend";
 
@@ -19,6 +21,8 @@ export default function Dashboard() {
     const [loading, setLoading] = useState(true);
     const [deleting, setDeleting] = useState<string | null>(null);
     const [plan, setPlan] = useState<PlanType | null>(null);
+    const [credits, setCredits] = useState<{ remaining: number; total: number } | null>(null);
+    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
     const [upgrading, setUpgrading] = useState(false);
     const justUpgraded = searchParams.get("upgraded") === "1";
 
@@ -52,6 +56,15 @@ export default function Dashboard() {
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [router]);
+
+    useEffect(() => {
+        if (plan === "free") {
+            fetch("/api/credits")
+                .then((r) => (r.ok ? r.json() : Promise.reject()))
+                .then((data) => setCredits({ remaining: data.remaining, total: data.total }))
+                .catch(() => setCredits({ remaining: 0, total: 3 }));
+        }
+    }, [plan]);
 
     const handleUpgrade = async (selectedPlan: "monthly" | "annual" = "annual") => {
         setUpgrading(true);
@@ -94,6 +107,8 @@ export default function Dashboard() {
 
     return (
         <div className="mx-auto max-w-6xl px-6 py-16">
+            {showUpgradeModal && <UpgradeModal onClose={() => setShowUpgradeModal(false)} />}
+
             {/* Upgrade success banner */}
             {justUpgraded && isPro && (
                 <div className="mb-6 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-3 text-sm text-emerald-300 flex items-center gap-2">
@@ -102,15 +117,22 @@ export default function Dashboard() {
                 </div>
             )}
 
-            {/* Free tier upgrade prompt */}
-            {plan === "free" && (
+            {/* Free tier credits info */}
+            {plan === "free" && credits !== null && (
                 <div className="mb-6 rounded-xl border border-zinc-800 bg-zinc-900/60 px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
                     <div>
-                        <p className="text-sm font-medium text-white">Unlock AI-powered CV generation</p>
-                        <p className="text-xs text-zinc-400 mt-0.5">Generate, improve, and tailor CVs with AI — $5/month or $49/year.</p>
+                        <div className="flex items-center gap-2 mb-0.5">
+                            <p className="text-sm font-medium text-white">AI credits</p>
+                            <CreditsDisplay remaining={credits.remaining} total={credits.total} />
+                        </div>
+                        <p className="text-xs text-zinc-400">
+                            {credits.remaining > 0
+                                ? `You have ${credits.remaining} free AI credit${credits.remaining !== 1 ? "s" : ""} remaining. Upgrade to Pro for unlimited access.`
+                                : "You've used all free AI credits. Upgrade to Pro for unlimited AI generation, improvement, and job tailoring."}
+                        </p>
                     </div>
                     <button
-                        onClick={() => handleUpgrade("annual")}
+                        onClick={() => setShowUpgradeModal(true)}
                         disabled={upgrading}
                         className="rounded-xl bg-emerald-500 px-5 py-2 text-sm font-semibold text-black transition hover:bg-emerald-400 disabled:opacity-50 whitespace-nowrap"
                     >
