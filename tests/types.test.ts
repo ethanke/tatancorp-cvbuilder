@@ -33,10 +33,12 @@ describe("types", () => {
       title: "My CV",
       target_role: "Engineer",
       content: EMPTY_CV_CONTENT,
+      is_public: false,
       created_at: "2025-01-01T00:00:00Z",
       updated_at: "2025-01-01T00:00:00Z",
     };
     expect(cv.id).toBe("test-id");
     expect(cv.content.name).toBe("");
+    expect(cv.is_public).toBe(false);
   });
 });

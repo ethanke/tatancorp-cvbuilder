@@ -42,6 +42,7 @@ export interface CV {
   title: string;
   target_role: string;
   content: CVContent;
+  is_public: boolean;
   created_at: string;
   updated_at: string;
 }
