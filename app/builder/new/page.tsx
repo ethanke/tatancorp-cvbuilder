@@ -3,10 +3,43 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { CVContent } from "@/lib/types";
 import { EMPTY_CV_CONTENT } from "@/lib/types";
+import CvPreview from "@/app/components/CvPreview";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? "https://tatancorp.xyz/tatancorp-backend";
+const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "https://cvbuilder.tatancorp.xyz";
 
 type Mode = "generate" | "improve" | "blank";
+
+function SignupModal({ onClose }: { onClose: () => void }) {
+    const loginUrl = `${BACKEND}/auth/login?next=${encodeURIComponent(`${SITE}/callback`)}`;
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div className="relative w-full max-w-md rounded-2xl border border-zinc-700 bg-zinc-900 p-8 shadow-2xl">
+                <button
+                    onClick={onClose}
+                    className="absolute right-4 top-4 text-zinc-500 hover:text-white text-xl leading-none"
+                    aria-label="Close"
+                >
+                    ×
+                </button>
+                <div className="flex flex-col items-center gap-5 text-center">
+                    <span className="text-4xl">⤓</span>
+                    <h2 className="text-xl font-bold text-white">Sign up to download your CV</h2>
+                    <p className="text-sm text-zinc-400">
+                        Create a free account to download your CV as a PDF and save it to your dashboard.
+                        Your generated CV will be automatically saved.
+                    </p>
+                    <a
+                        href={loginUrl}
+                        className="w-full rounded-xl bg-emerald-500 px-6 py-3 text-sm font-semibold text-black text-center transition hover:bg-emerald-400"
+                    >
+                        Sign up free — keep my CV
+                    </a>
+                </div>
+            </div>
+        </div>
+    );
+}
 
 export default function NewCV() {
     const router = useRouter();
@@ -19,18 +52,63 @@ export default function NewCV() {
     const [plan, setPlan] = useState<"free" | "monthly" | "annual" | null>(null);
     const [upgrading, setUpgrading] = useState(false);
 
+    // Guest state
+    const [isGuest, setIsGuest] = useState<boolean | null>(null);
+    const [guestCv, setGuestCv] = useState<CVContent | null>(null);
+    const [guestAlreadyGenerated, setGuestAlreadyGenerated] = useState(false);
+    const [showSignupModal, setShowSignupModal] = useState(false);
+
     useEffect(() => {
-        fetch(`${BACKEND}/payments/status`, { credentials: "include" })
-            .then((r) => (r.ok ? r.json() : Promise.reject()))
+        // Detect guest vs authenticated
+        fetch(`${BACKEND}/auth/me`, { credentials: "include" })
+            .then((r) => (r.ok ? r.json() : null))
             .then((data) => {
-                const p = data.plan;
-                if (p === "monthly" || p === "annual") {
-                    setPlan(p);
+                if (data?.user) {
+                    setIsGuest(false);
+                    // Load plan for authenticated users
+                    fetch(`${BACKEND}/payments/status`, { credentials: "include" })
+                        .then((r) => (r.ok ? r.json() : Promise.reject()))
+                        .then((d) => {
+                            const p = d.plan;
+                            if (p === "monthly" || p === "annual") {
+                                setPlan(p);
+                            } else {
+                                setPlan("free");
+                            }
+                        })
+                        .catch(() => setPlan("free"));
                 } else {
-                    setPlan("free");
+                    setIsGuest(true);
+                    // Load any previously generated guest CV from localStorage
+                    try {
+                        const stored = localStorage.getItem("guest_cv");
+                        const generated = localStorage.getItem("guest_cv_generated");
+                        if (stored) {
+                            setGuestCv(JSON.parse(stored) as CVContent);
+                        }
+                        if (generated) {
+                            setGuestAlreadyGenerated(true);
+                        }
+                    } catch {
+                        // ignore localStorage errors
+                    }
                 }
             })
-            .catch(() => setPlan("free"));
+            .catch(() => {
+                setIsGuest(true);
+                try {
+                    const stored = localStorage.getItem("guest_cv");
+                    const generated = localStorage.getItem("guest_cv_generated");
+                    if (stored) {
+                        setGuestCv(JSON.parse(stored) as CVContent);
+                    }
+                    if (generated) {
+                        setGuestAlreadyGenerated(true);
+                    }
+                } catch {
+                    // ignore localStorage errors
+                }
+            });
     }, []);
 
     const handleUpgrade = async () => {
@@ -103,7 +181,21 @@ export default function NewCV() {
             }
             const { cv }: { cv: CVContent } = await aiRes.json();
 
-            // 2. Save to backend
+            if (isGuest) {
+                // Guest: store in localStorage and show inline preview
+                try {
+                    localStorage.setItem("guest_cv", JSON.stringify(cv));
+                    localStorage.setItem("guest_cv_generated", "1");
+                } catch {
+                    // ignore localStorage errors
+                }
+                setGuestCv(cv);
+                setGuestAlreadyGenerated(true);
+                setLoading(false);
+                return;
+            }
+
+            // 2. Authenticated: save to backend
             const saveRes = await fetch(`${BACKEND}/cv`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -123,41 +215,131 @@ export default function NewCV() {
         }
     };
 
+    // Loading state
+    if (isGuest === null) {
+        return (
+            <div className="flex items-center justify-center min-h-[60vh]">
+                <div className="flex items-center gap-2 text-zinc-500">
+                    <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                    Loading…
+                </div>
+            </div>
+        );
+    }
+
+    // Guest with a generated CV — show preview + signup CTA
+    if (isGuest && guestCv) {
+        const loginUrl = `${BACKEND}/auth/login?next=${encodeURIComponent(`${SITE}/callback`)}`;
+        return (
+            <div className="mx-auto max-w-4xl px-6 py-10">
+                {showSignupModal && <SignupModal onClose={() => setShowSignupModal(false)} />}
+                <div className="mb-6 flex items-center justify-between gap-4 flex-wrap">
+                    <div>
+                        <h1 className="text-2xl font-bold">Your AI-generated CV</h1>
+                        <p className="text-zinc-400 text-sm mt-1">Sign up to download as PDF and save to your account.</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => setShowSignupModal(true)}
+                            className="rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-emerald-400"
+                        >
+                            ⤓ Download PDF
+                        </button>
+                        <a
+                            href={loginUrl}
+                            className="rounded-xl border border-zinc-700 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-zinc-800"
+                        >
+                            Sign up free
+                        </a>
+                    </div>
+                </div>
+                <div className="mb-6 rounded-xl border border-amber-500/20 bg-amber-500/5 px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
+                    <div>
+                        <p className="text-sm font-medium text-white">Sign up to generate more CVs</p>
+                        <p className="text-xs text-zinc-400 mt-0.5">Free account gives you 3 AI credits. Pro unlocks unlimited generations, improve &amp; tailor.</p>
+                    </div>
+                    <a
+                        href={loginUrl}
+                        className="rounded-xl bg-emerald-500 px-5 py-2 text-sm font-semibold text-black transition hover:bg-emerald-400 whitespace-nowrap"
+                    >
+                        Create free account
+                    </a>
+                </div>
+                <CvPreview cv={guestCv} />
+            </div>
+        );
+    }
+
+    // Guest who already generated but no CV in state (e.g. cleared) — show sign up CTA
+    if (isGuest && guestAlreadyGenerated) {
+        const loginUrl = `${BACKEND}/auth/login?next=${encodeURIComponent(`${SITE}/callback`)}`;
+        return (
+            <div className="mx-auto max-w-3xl px-6 py-16 flex flex-col items-center gap-6 text-center">
+                <span className="text-5xl">✦</span>
+                <h1 className="text-3xl font-bold">You&apos;ve used your free generation</h1>
+                <p className="text-zinc-400 max-w-md">
+                    Sign up for free to generate more CVs, improve existing ones, and download as PDF.
+                    Your previously generated CV will be saved to your account.
+                </p>
+                <a
+                    href={loginUrl}
+                    className="rounded-xl bg-emerald-500 px-8 py-3 text-base font-semibold text-black transition hover:bg-emerald-400"
+                >
+                    Sign up free — keep my CV
+                </a>
+            </div>
+        );
+    }
+
     return (
         <div className="mx-auto max-w-3xl px-6 py-16">
+            {showSignupModal && <SignupModal onClose={() => setShowSignupModal(false)} />}
             <div className="mb-10">
                 <h1 className="text-3xl font-bold">Create a new CV</h1>
                 <p className="text-zinc-400 text-sm mt-1">
-                    AI will generate a complete, structured resume for you.
+                    {isGuest
+                        ? "Try AI CV generation for free — no signup required."
+                        : "AI will generate a complete, structured resume for you."}
                 </p>
             </div>
 
             {/* Mode toggle */}
             <div className="flex gap-2 mb-8 p-1 rounded-xl bg-zinc-900 border border-zinc-800 w-fit">
-                <button
-                    onClick={() => setMode("blank")}
-                    className={`px-5 py-2 rounded-lg text-sm font-medium transition ${
-                        mode === "blank" ? "bg-emerald-500 text-black" : "text-zinc-400 hover:text-white"
-                    }`}
-                >
-                    📝 Blank CV
-                </button>
+                {!isGuest && (
+                    <button
+                        onClick={() => setMode("blank")}
+                        className={`px-5 py-2 rounded-lg text-sm font-medium transition ${
+                            mode === "blank" ? "bg-emerald-500 text-black" : "text-zinc-400 hover:text-white"
+                        }`}
+                    >
+                        📝 Blank CV
+                    </button>
+                )}
                 {(["generate", "improve"] as Mode[]).map((m) => (
                     <button
                         key={m}
                         onClick={() => setMode(m)}
+                        disabled={isGuest && m === "improve"}
                         className={`px-5 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5 ${
                             mode === m ? "bg-emerald-500 text-black" : "text-zinc-400 hover:text-white"
-                        }`}
+                        } ${isGuest && m === "improve" ? "opacity-40 cursor-not-allowed" : ""}`}
                     >
                         {m === "generate" ? "✦ Generate from scratch" : "↑ Improve existing"}
-                        {plan === "free" && <span className="text-[10px] opacity-60">(Pro)</span>}
+                        {!isGuest && plan === "free" && <span className="text-[10px] opacity-60">(Pro)</span>}
                     </button>
                 ))}
             </div>
 
-            {/* Free user upgrade prompt for AI modes */}
-            {plan === "free" && mode !== "blank" && (
+            {/* Guest banner */}
+            {isGuest && (
+                <div className="mb-6 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-5 py-4">
+                    <p className="text-sm font-medium text-white">Try AI CV generation for free</p>
+                    <p className="text-xs text-zinc-400 mt-0.5">Generate 1 CV without signing up. Sign up free to download as PDF and generate more.</p>
+                </div>
+            )}
+
+            {/* Authenticated free user upgrade prompt for AI modes */}
+            {!isGuest && plan === "free" && mode !== "blank" && (
                 <div className="mb-6 rounded-xl border border-amber-500/20 bg-amber-500/5 px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
                     <div>
                         <p className="text-sm font-medium text-white">AI features require Pro</p>
@@ -239,7 +421,7 @@ export default function NewCV() {
 
                 <button
                     onClick={handleSubmit}
-                    disabled={loading || (plan === "free" && mode !== "blank")}
+                    disabled={loading || (!isGuest && plan === "free" && mode !== "blank")}
                     className="rounded-xl bg-emerald-500 px-7 py-3 text-sm font-semibold text-black transition hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed w-fit"
                 >
                     {loading ? (
