@@ -338,8 +338,12 @@ def main() -> int:
         print(f"uploaded {uploaded} runtime files")
 
     if args.enable:
-        result = api.enable_passenger_app(app_name)
-        print(result)
+        try:
+            result = api.enable_passenger_app(app_name)
+            print(result)
+        except RuntimeError as e:
+            # App may already be enabled (manually configured in cPanel) — not fatal
+            print(f"Warning: enable_passenger_app: {e} (continuing)", file=sys.stderr)
 
     if args.status or (not args.deploy and not args.register and not args.enable):
         print_status(api, remote_root, app_name)
