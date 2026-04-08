@@ -1,4 +1,4 @@
-name: Deploy CV Builder to cPanel
+name: Deploy CV Builder
 
 on:
   push:
@@ -9,49 +9,63 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     env:
-      CPANEL_HOST: ${{ secrets.CPANEL_HOST }}
-      CPANEL_PORT: "2083"
-      CPANEL_USERNAME: ${{ secrets.CPANEL_USERNAME }}
-      CPANEL_API_KEY: ${{ secrets.CPANEL_API_KEY }}
-      APP_DOMAIN: cvbuilder.tatancorp.xyz
-      CPANEL_APP_NAME: tatancorp-cvbuilder
-      CPANEL_APP_BASE_URI: /
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       NEXT_PUBLIC_BACKEND_URL: ${{ secrets.NEXT_PUBLIC_BACKEND_URL }}
       BACKEND_URL: ${{ secrets.NEXT_PUBLIC_BACKEND_URL }}
       NEXT_PUBLIC_APP_URL: https://cvbuilder.tatancorp.xyz
-      NODE_ENV: production
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "20"
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+          cache: "npm"
 
       - name: Install dependencies
         run: npm ci --include=dev
 
-      - name: Install deploy dependencies
-        run: python -m pip install requests python-dotenv
-
-      - name: Create .env for build
+      - name: Create .env
         run: |
-          echo "OPENROUTER_API_KEY=${OPENROUTER_API_KEY}" >> .env
-          echo "NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL}" >> .env
-          echo "BACKEND_URL=${BACKEND_URL}" >> .env
-          echo "NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}" >> .env
+          printenv | grep -E '^(OPENROUTER_|NEXT_PUBLIC_BACKEND_URL|BACKEND_URL|NEXT_PUBLIC_APP_URL)=' > .env
           echo "NODE_ENV=production" >> .env
 
       - name: Build Next.js
         run: npm run build
 
-      - name: Deploy via cPanel API
-        run: python scripts/deploy_cpanel_api.py --deploy --enable --status
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p ${{ secrets.SSH_PORT }} ${{ secrets.CPANEL_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Deploy
+        env:
+          SSH_USER: ${{ secrets.CPANEL_USERNAME }}
+          SSH_HOST: ${{ secrets.CPANEL_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          REMOTE_DIR: /home/${{ secrets.CPANEL_USERNAME }}/tatancorp-cvbuilder
+        run: |
+          SSH="ssh -i ~/.ssh/deploy_key -p ${SSH_PORT}"
+          TARGET="${SSH_USER}@${SSH_HOST}"
+
+          # Ensure remote directory exists
+          $SSH $TARGET "mkdir -p ${REMOTE_DIR}/tmp"
+
+          # Sync runtime files + .env
+          rsync -azv -e "$SSH" \
+            server.js package.json package-lock.json .env \
+            ${TARGET}:${REMOTE_DIR}/
+
+          # Sync .next build output (delete stale artifacts)
+          rsync -azv --delete -e "$SSH" \
+            --exclude='cache' \
+            .next/ ${TARGET}:${REMOTE_DIR}/.next/
+
+          # Sync public assets
+          [ -d public ] && rsync -azv --delete -e "$SSH" \
+            public/ ${TARGET}:${REMOTE_DIR}/public/
+
+          # Install production deps and restart Passenger
+          $SSH $TARGET "cd ${REMOTE_DIR} && npm install --production 2>&1 | tail -5 && touch tmp/restart.txt"

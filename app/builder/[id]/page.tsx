@@ -56,6 +56,7 @@ export default function BuilderEditor() {
     const [jobDesc, setJobDesc] = useState("");
     const [tailoring, setTailoring] = useState(false);
     const [tailorError, setTailorError] = useState("");
+    const [plan, setPlan] = useState<"free" | "pro" | null>(null);
     const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
@@ -63,6 +64,11 @@ export default function BuilderEditor() {
             .then((r) => (r.ok ? r.json() : Promise.reject()))
             .then((data: { cv: CV }) => { setCv(data.cv); setContent(data.cv.content); })
             .catch(() => router.replace("/dashboard"));
+
+        fetch(`${BACKEND}/payments/status`, { credentials: "include" })
+            .then((r) => (r.ok ? r.json() : Promise.reject()))
+            .then((data) => setPlan(data.plan ?? "free"))
+            .catch(() => setPlan("free"));
     }, [id, router]);
 
     const doSave = useCallback((c: CVContent) => {
@@ -99,7 +105,14 @@ export default function BuilderEditor() {
                 body: JSON.stringify({ jobDescription: jobDesc, cvContent: content }),
             });
             const data = await res.json();
-            if (!res.ok) throw new Error(data.error || "Tailor failed");
+            if (!res.ok) {
+                if (data.code === "PLAN_REQUIRED") {
+                    setTailorError("AI features require Pro — upgrade from your dashboard for $9.");
+                    setTailoring(false);
+                    return;
+                }
+                throw new Error(data.error || "Tailor failed");
+            }
             if (data.newId) {
                 router.push(`/builder/${data.newId}`);
             }
@@ -149,7 +162,7 @@ export default function BuilderEditor() {
                     onClick={() => setTailorOpen(true)}
                     className="shrink-0 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs font-medium hover:bg-zinc-800 transition"
                 >
-                    ⌖ Tailor to job
+                    ⌖ Tailor to job {plan === "free" && <span className="text-zinc-500">(Pro)</span>}
                 </button>
                 <button
                     onClick={() => window.print()}

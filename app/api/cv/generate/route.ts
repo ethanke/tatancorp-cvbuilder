@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { extractJson } from "@/lib/extract-json";
+import { getUserPlan } from "@/lib/plan";
 
 const BACKEND = process.env.BACKEND_URL ?? "https://tatancorp.xyz/tatancorp-backend";
 const openai = new OpenAI({
@@ -47,6 +48,11 @@ export async function POST(req: NextRequest) {
   const cookie = req.headers.get("cookie") ?? "";
   const user = await getUser(cookie);
   if (!user) return NextResponse.json({ error: "not authenticated" }, { status: 401 });
+
+  const plan = await getUserPlan(cookie);
+  if (plan !== "pro") {
+    return NextResponse.json({ error: "AI features require Pro. Upgrade for a one-time fee.", code: "PLAN_REQUIRED" }, { status: 403 });
+  }
 
   const now = Date.now();
   const last = rateLimitMap.get(user.id) ?? 0;

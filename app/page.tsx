@@ -109,6 +109,58 @@ export default function LandingPage() {
                 </div>
             </section>
 
+            {/* Pricing */}
+            <section id="pricing" className="flex flex-col gap-8">
+                <div className="text-center">
+                    <h2 className="text-3xl font-bold">Simple pricing</h2>
+                    <p className="text-zinc-400 text-sm mt-2">Start free. Unlock AI when you&apos;re ready — one payment, forever.</p>
+                </div>
+                <div className="grid sm:grid-cols-2 gap-5 max-w-3xl mx-auto w-full">
+                    {/* Free */}
+                    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6 flex flex-col gap-4">
+                        <p className="text-xs text-zinc-500 uppercase tracking-widest font-medium">Free</p>
+                        <p className="text-4xl font-bold text-white">$0</p>
+                        <ul className="text-sm text-zinc-300 flex flex-col gap-2 mt-2">
+                            <li className="flex items-center gap-2"><span className="text-emerald-400">✓</span> Create &amp; edit CVs manually</li>
+                            <li className="flex items-center gap-2"><span className="text-emerald-400">✓</span> Export to PDF</li>
+                            <li className="flex items-center gap-2"><span className="text-emerald-400">✓</span> Unlimited CVs</li>
+                            <li className="flex items-center gap-2"><span className="text-zinc-600">✗</span><span className="text-zinc-500">AI generation</span></li>
+                            <li className="flex items-center gap-2"><span className="text-zinc-600">✗</span><span className="text-zinc-500">AI improve &amp; tailor</span></li>
+                        </ul>
+                        <a
+                            href={`${BACKEND}/auth/login?next=${encodeURIComponent("https://cvbuilder.tatancorp.xyz/dashboard")}`}
+                            className="mt-auto rounded-xl border border-zinc-700 px-5 py-2.5 text-sm font-semibold text-white text-center transition hover:bg-zinc-800"
+                        >
+                            Get started
+                        </a>
+                    </div>
+                    {/* Pro */}
+                    <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/5 p-6 flex flex-col gap-4 relative">
+                        <div className="absolute -top-3 right-5 rounded-full bg-emerald-500 px-3 py-0.5 text-xs font-semibold text-black">
+                            Best value
+                        </div>
+                        <p className="text-xs text-emerald-400 uppercase tracking-widest font-medium">Pro — Lifetime</p>
+                        <div className="flex items-baseline gap-1">
+                            <span className="text-4xl font-bold text-white">$9</span>
+                            <span className="text-sm text-zinc-500">one-time</span>
+                        </div>
+                        <ul className="text-sm text-zinc-300 flex flex-col gap-2 mt-2">
+                            <li className="flex items-center gap-2"><span className="text-emerald-400">✓</span> Everything in Free</li>
+                            <li className="flex items-center gap-2"><span className="text-emerald-400">✓</span> AI-generated CVs from a bio</li>
+                            <li className="flex items-center gap-2"><span className="text-emerald-400">✓</span> AI improve existing CVs</li>
+                            <li className="flex items-center gap-2"><span className="text-emerald-400">✓</span> Tailor to any job description</li>
+                            <li className="flex items-center gap-2"><span className="text-emerald-400">✓</span> Lifetime access — no subscription</li>
+                        </ul>
+                        <a
+                            href={`${BACKEND}/auth/login?next=${encodeURIComponent("https://cvbuilder.tatancorp.xyz/dashboard?upgrade=1")}`}
+                            className="mt-auto rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-black text-center transition hover:bg-emerald-400"
+                        >
+                            Unlock AI — $9
+                        </a>
+                    </div>
+                </div>
+            </section>
+
             {/* CTA footer */}
             <section className="flex flex-col items-center gap-5 text-center py-8">
                 <h2 className="text-3xl font-bold">Ready? It takes 30 seconds.</h2>

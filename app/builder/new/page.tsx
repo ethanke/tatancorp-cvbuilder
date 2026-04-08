@@ -1,11 +1,12 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { CVContent } from "@/lib/types";
+import { EMPTY_CV_CONTENT } from "@/lib/types";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? "https://tatancorp.xyz/tatancorp-backend";
 
-type Mode = "generate" | "improve";
+type Mode = "generate" | "improve" | "blank";
 
 export default function NewCV() {
     const router = useRouter();
@@ -15,8 +16,53 @@ export default function NewCV() {
     const [targetRole, setTargetRole] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
+    const [plan, setPlan] = useState<"free" | "pro" | null>(null);
+    const [upgrading, setUpgrading] = useState(false);
+
+    useEffect(() => {
+        fetch(`${BACKEND}/payments/status`, { credentials: "include" })
+            .then((r) => (r.ok ? r.json() : Promise.reject()))
+            .then((data) => setPlan(data.plan ?? "free"))
+            .catch(() => setPlan("free"));
+    }, []);
+
+    const handleUpgrade = async () => {
+        setUpgrading(true);
+        try {
+            const res = await fetch("/api/checkout", { method: "POST" });
+            const data = await res.json();
+            if (data.url) window.location.href = data.url;
+        } catch { /* ignore */ }
+        setUpgrading(false);
+    };
+
+    const handleBlankCreate = async () => {
+        setLoading(true);
+        setError("");
+        try {
+            const saveRes = await fetch(`${BACKEND}/cv`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                    title: targetRole ? `${targetRole} — CV` : "My CV",
+                    target_role: targetRole,
+                    content: EMPTY_CV_CONTENT,
+                }),
+            });
+            if (!saveRes.ok) throw new Error("Failed to save CV");
+            const { id } = await saveRes.json();
+            router.push(`/builder/${id}`);
+        } catch (e: unknown) {
+            setError(e instanceof Error ? e.message : "Something went wrong");
+            setLoading(false);
+        }
+    };
 
     const handleSubmit = async () => {
+        if (mode === "blank") {
+            return handleBlankCreate();
+        }
         setError("");
         const text = mode === "generate" ? bio : existingText;
         if (!text.trim()) {
@@ -37,6 +83,11 @@ export default function NewCV() {
             });
             if (!aiRes.ok) {
                 const d = await aiRes.json();
+                if (d.code === "PLAN_REQUIRED") {
+                    setError("AI features require Pro. Upgrade below for a one-time $9 payment.");
+                    setLoading(false);
+                    return;
+                }
                 throw new Error(d.error || "AI generation failed");
             }
             const { cv }: { cv: CVContent } = await aiRes.json();
@@ -72,22 +123,57 @@ export default function NewCV() {
 
             {/* Mode toggle */}
             <div className="flex gap-2 mb-8 p-1 rounded-xl bg-zinc-900 border border-zinc-800 w-fit">
+                <button
+                    onClick={() => setMode("blank")}
+                    className={`px-5 py-2 rounded-lg text-sm font-medium transition ${
+                        mode === "blank" ? "bg-emerald-500 text-black" : "text-zinc-400 hover:text-white"
+                    }`}
+                >
+                    📝 Blank CV
+                </button>
                 {(["generate", "improve"] as Mode[]).map((m) => (
                     <button
                         key={m}
                         onClick={() => setMode(m)}
-                        className={`px-5 py-2 rounded-lg text-sm font-medium transition ${mode === m
-                                ? "bg-emerald-500 text-black"
-                                : "text-zinc-400 hover:text-white"
-                            }`}
+                        className={`px-5 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5 ${
+                            mode === m ? "bg-emerald-500 text-black" : "text-zinc-400 hover:text-white"
+                        }`}
                     >
                         {m === "generate" ? "✦ Generate from scratch" : "↑ Improve existing"}
+                        {plan === "free" && <span className="text-[10px] opacity-60">(Pro)</span>}
                     </button>
                 ))}
             </div>
 
+            {/* Free user upgrade prompt for AI modes */}
+            {plan === "free" && mode !== "blank" && (
+                <div className="mb-6 rounded-xl border border-amber-500/20 bg-amber-500/5 px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
+                    <div>
+                        <p className="text-sm font-medium text-white">AI features require Pro</p>
+                        <p className="text-xs text-zinc-400 mt-0.5">One-time $9 payment — unlocks AI generation, improvement, and job tailoring forever.</p>
+                    </div>
+                    <button
+                        onClick={handleUpgrade}
+                        disabled={upgrading}
+                        className="rounded-xl bg-emerald-500 px-5 py-2 text-sm font-semibold text-black transition hover:bg-emerald-400 disabled:opacity-50 whitespace-nowrap"
+                    >
+                        {upgrading ? "Redirecting…" : "Upgrade to Pro — $9"}
+                    </button>
+                </div>
+            )}
+
             <div className="flex flex-col gap-5">
-                {mode === "generate" ? (
+                {mode === "blank" ? (
+                    <div className="flex flex-col gap-2">
+                        <label className="text-sm font-medium text-zinc-300">
+                            CV title{" "}
+                            <span className="text-zinc-500 font-normal">(you&apos;ll fill in the details in the editor)</span>
+                        </label>
+                        <p className="text-sm text-zinc-400">
+                            Creates an empty CV template. You&apos;ll edit each section manually — name, experience, education, skills, etc.
+                        </p>
+                    </div>
+                ) : mode === "generate" ? (
                     <div className="flex flex-col gap-2">
                         <label className="text-sm font-medium text-zinc-300">
                             Tell us about yourself{" "}
@@ -142,16 +228,16 @@ export default function NewCV() {
 
                 <button
                     onClick={handleSubmit}
-                    disabled={loading}
+                    disabled={loading || (plan === "free" && mode !== "blank")}
                     className="rounded-xl bg-emerald-500 px-7 py-3 text-sm font-semibold text-black transition hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed w-fit"
                 >
                     {loading ? (
                         <span className="flex items-center gap-2">
                             <span className="h-3.5 w-3.5 rounded-full border-2 border-black/30 border-t-black animate-spin" />
-                            Generating with AI…
+                            {mode === "blank" ? "Creating…" : "Generating with AI…"}
                         </span>
                     ) : (
-                        mode === "generate" ? "Generate my CV ✦" : "Improve my CV ↑"
+                        mode === "blank" ? "Create blank CV" : mode === "generate" ? "Generate my CV ✦" : "Improve my CV ↑"
                     )}
                 </button>
             </div>
