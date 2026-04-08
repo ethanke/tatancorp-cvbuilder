@@ -1,0 +1,58 @@
+name: Deploy CV Builder to cPanel
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    env:
+      CPANEL_HOST: ${{ secrets.CPANEL_HOST }}
+      CPANEL_PORT: "2083"
+      CPANEL_USERNAME: ${{ secrets.CPANEL_USERNAME }}
+      CPANEL_API_KEY: ${{ secrets.CPANEL_API_KEY }}
+      APP_DOMAIN: cvbuilder.tatancorp.xyz
+      CPANEL_APP_NAME: tatancorp-cvbuilder
+      CPANEL_APP_BASE_URI: /
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      NEXT_PUBLIC_BACKEND_URL: ${{ secrets.NEXT_PUBLIC_BACKEND_URL }}
+      BACKEND_URL: ${{ secrets.NEXT_PUBLIC_BACKEND_URL }}
+      NEXT_PUBLIC_APP_URL: https://cvbuilder.tatancorp.xyz
+      NODE_ENV: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install deploy dependencies
+        run: python -m pip install requests python-dotenv
+
+      - name: Create .env for build
+        run: |
+          echo "OPENROUTER_API_KEY=${OPENROUTER_API_KEY}" >> .env
+          echo "NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL}" >> .env
+          echo "BACKEND_URL=${BACKEND_URL}" >> .env
+          echo "NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}" >> .env
+          echo "NODE_ENV=production" >> .env
+
+      - name: Build Next.js
+        run: npm run build
+
+      - name: Deploy via cPanel API
+        run: python scripts/deploy_cpanel_api.py --deploy --enable --status
