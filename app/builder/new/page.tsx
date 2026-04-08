@@ -3,6 +3,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { CVContent } from "@/lib/types";
 import { EMPTY_CV_CONTENT } from "@/lib/types";
+import CreditsDisplay from "@/app/components/CreditsDisplay";
+import UpgradeModal from "@/app/components/UpgradeModal";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? "https://tatancorp.xyz/tatancorp-backend";
 
@@ -17,7 +19,8 @@ export default function NewCV() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const [plan, setPlan] = useState<"free" | "monthly" | "annual" | null>(null);
-    const [upgrading, setUpgrading] = useState(false);
+    const [credits, setCredits] = useState<{ remaining: number; total: number } | null>(null);
+    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
     useEffect(() => {
         fetch(`${BACKEND}/payments/status`, { credentials: "include" })
@@ -33,19 +36,14 @@ export default function NewCV() {
             .catch(() => setPlan("free"));
     }, []);
 
-    const handleUpgrade = async () => {
-        setUpgrading(true);
-        try {
-            const res = await fetch("/api/checkout", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ plan: "annual" }),
-            });
-            const data = await res.json();
-            if (data.url) window.location.href = data.url;
-        } catch { /* ignore */ }
-        setUpgrading(false);
-    };
+    useEffect(() => {
+        if (plan === "free") {
+            fetch("/api/credits")
+                .then((r) => (r.ok ? r.json() : Promise.reject()))
+                .then((data) => setCredits({ remaining: data.remaining, total: data.total }))
+                .catch(() => setCredits({ remaining: 0, total: 3 }));
+        }
+    }, [plan]);
 
     const handleBlankCreate = async () => {
         setLoading(true);
@@ -94,8 +92,13 @@ export default function NewCV() {
             });
             if (!aiRes.ok) {
                 const d = await aiRes.json();
+                if (d.code === "ai_credits_exhausted") {
+                    setShowUpgradeModal(true);
+                    setLoading(false);
+                    return;
+                }
                 if (d.code === "PLAN_REQUIRED") {
-                    setError("AI features require Pro. Upgrade below — $5/month or $49/year.");
+                    setShowUpgradeModal(true);
                     setLoading(false);
                     return;
                 }
@@ -123,10 +126,19 @@ export default function NewCV() {
         }
     };
 
+    const creditsExhausted = plan === "free" && credits !== null && credits.remaining <= 0;
+
     return (
         <div className="mx-auto max-w-3xl px-6 py-16">
+            {showUpgradeModal && <UpgradeModal onClose={() => setShowUpgradeModal(false)} />}
+
             <div className="mb-10">
-                <h1 className="text-3xl font-bold">Create a new CV</h1>
+                <div className="flex items-center gap-3 flex-wrap">
+                    <h1 className="text-3xl font-bold">Create a new CV</h1>
+                    {plan === "free" && credits !== null && (
+                        <CreditsDisplay remaining={credits.remaining} total={credits.total} />
+                    )}
+                </div>
                 <p className="text-zinc-400 text-sm mt-1">
                     AI will generate a complete, structured resume for you.
                 </p>
@@ -151,24 +163,23 @@ export default function NewCV() {
                         }`}
                     >
                         {m === "generate" ? "✦ Generate from scratch" : "↑ Improve existing"}
-                        {plan === "free" && <span className="text-[10px] opacity-60">(Pro)</span>}
+                        {creditsExhausted && <span className="text-[10px] opacity-60">(no credits)</span>}
                     </button>
                 ))}
             </div>
 
-            {/* Free user upgrade prompt for AI modes */}
-            {plan === "free" && mode !== "blank" && (
+            {/* Free user credits exhausted prompt */}
+            {creditsExhausted && mode !== "blank" && (
                 <div className="mb-6 rounded-xl border border-amber-500/20 bg-amber-500/5 px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
                     <div>
-                        <p className="text-sm font-medium text-white">AI features require Pro</p>
-                        <p className="text-xs text-zinc-400 mt-0.5">Subscribe to Pro to unlock AI generation, improvement, and job tailoring — $5/month or $49/year.</p>
+                        <p className="text-sm font-medium text-white">You&apos;ve used all 3 free AI credits</p>
+                        <p className="text-xs text-zinc-400 mt-0.5">Upgrade to Pro for unlimited AI generation, improvement, and job tailoring — $5/month or $49/year.</p>
                     </div>
                     <button
-                        onClick={handleUpgrade}
-                        disabled={upgrading}
-                        className="rounded-xl bg-emerald-500 px-5 py-2 text-sm font-semibold text-black transition hover:bg-emerald-400 disabled:opacity-50 whitespace-nowrap"
+                        onClick={() => setShowUpgradeModal(true)}
+                        className="rounded-xl bg-emerald-500 px-5 py-2 text-sm font-semibold text-black transition hover:bg-emerald-400 whitespace-nowrap"
                     >
-                        {upgrading ? "Redirecting…" : "Upgrade to Pro — $49/yr"}
+                        Upgrade to Pro
                     </button>
                 </div>
             )}
@@ -239,7 +250,7 @@ export default function NewCV() {
 
                 <button
                     onClick={handleSubmit}
-                    disabled={loading || (plan === "free" && mode !== "blank")}
+                    disabled={loading || (creditsExhausted && mode !== "blank")}
                     className="rounded-xl bg-emerald-500 px-7 py-3 text-sm font-semibold text-black transition hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed w-fit"
                 >
                     {loading ? (

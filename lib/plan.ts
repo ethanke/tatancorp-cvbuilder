@@ -2,6 +2,12 @@ const BACKEND = process.env.BACKEND_URL ?? "https://tatancorp.xyz/tatancorp-back
 
 export type PlanType = "free" | "monthly" | "annual";
 
+export interface AiCredits {
+  remaining: number;
+  total: number;
+  used: number;
+}
+
 /**
  * Check the user's subscription plan.
  * Returns "monthly" | "annual" | "free".
@@ -19,5 +25,24 @@ export async function getUserPlan(cookie: string): Promise<PlanType> {
     return "free";
   } catch {
     return "free";
+  }
+}
+
+/**
+ * Fetch remaining AI credits for the user (free tier).
+ * Returns { remaining, total, used }.
+ * Falls back to { remaining: 0, total: 3, used: 3 } on network errors or non-ok responses,
+ * which safely blocks further AI usage until the backend is reachable.
+ */
+export async function getUserAiCredits(cookie: string): Promise<AiCredits> {
+  try {
+    const res = await fetch(`${BACKEND}/payments/ai/credits`, {
+      headers: { cookie },
+      cache: "no-store",
+    });
+    if (!res.ok) return { remaining: 0, total: 3, used: 3 };
+    return await res.json();
+  } catch {
+    return { remaining: 0, total: 3, used: 3 };
   }
 }

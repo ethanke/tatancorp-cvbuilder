@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { getUserPlan } from "../lib/plan";
+import { getUserPlan, getUserAiCredits } from "../lib/plan";
 
 // Mock global fetch
 const mockFetch = vi.fn();
@@ -73,5 +73,43 @@ describe("getUserPlan", () => {
     await getUserPlan("tc_session=test");
     const url = mockFetch.mock.calls[0][0] as string;
     expect(url).toContain("/payments/status");
+  });
+});
+
+describe("getUserAiCredits", () => {
+  it("returns credits from backend", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ remaining: 2, total: 3, used: 1 }),
+    });
+    const credits = await getUserAiCredits("tc_session=abc123");
+    expect(credits).toEqual({ remaining: 2, total: 3, used: 1 });
+    const call = mockFetch.mock.calls[0];
+    expect(call[0]).toContain("/payments/ai/credits");
+    expect(call[1].headers.cookie).toBe("tc_session=abc123");
+  });
+
+  it("returns fallback when backend returns non-ok", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ error: "not authenticated" }),
+    });
+    const credits = await getUserAiCredits("");
+    expect(credits).toEqual({ remaining: 0, total: 3, used: 3 });
+  });
+
+  it("returns fallback when fetch throws", async () => {
+    mockFetch.mockRejectedValueOnce(new Error("network error"));
+    const credits = await getUserAiCredits("tc_session=abc123");
+    expect(credits).toEqual({ remaining: 0, total: 3, used: 3 });
+  });
+
+  it("returns zero remaining when credits exhausted", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ remaining: 0, total: 3, used: 3 }),
+    });
+    const credits = await getUserAiCredits("tc_session=abc123");
+    expect(credits.remaining).toBe(0);
   });
 });
