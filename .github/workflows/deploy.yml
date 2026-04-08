@@ -1,19 +1,56 @@
-name: Deploy CV Builder
+name: CI — Test & Deploy
 
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
-  build-and-deploy:
+  # ── Tests ────────────────────────────────────────────────────────
+  test:
+    runs-on: ubuntu-latest
+    env:
+      OPENROUTER_API_KEY: fake_key_for_build
+      NEXT_PUBLIC_BACKEND_URL: https://tatancorp.xyz/tatancorp-backend
+      BACKEND_URL: https://tatancorp.xyz/tatancorp-backend
+      NEXT_PUBLIC_APP_URL: https://cvbuilder.tatancorp.xyz
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci --include=dev
+
+      - name: Create .env
+        run: |
+          printenv | grep -E '^(OPENROUTER_|NEXT_PUBLIC_BACKEND_URL|BACKEND_URL|NEXT_PUBLIC_APP_URL)=' > .env
+          echo "NODE_ENV=production" >> .env
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  # ── Deploy (only on push to main, after tests pass) ─────────────
+  deploy:
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     env:
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       NEXT_PUBLIC_BACKEND_URL: ${{ secrets.NEXT_PUBLIC_BACKEND_URL }}
       BACKEND_URL: ${{ secrets.NEXT_PUBLIC_BACKEND_URL }}
       NEXT_PUBLIC_APP_URL: https://cvbuilder.tatancorp.xyz
-
     steps:
       - uses: actions/checkout@v4
 
@@ -50,22 +87,78 @@ jobs:
           SSH="ssh -i ~/.ssh/deploy_key -p ${SSH_PORT}"
           TARGET="${SSH_USER}@${SSH_HOST}"
 
-          # Ensure remote directory exists
           $SSH $TARGET "mkdir -p ${REMOTE_DIR}/tmp"
 
-          # Sync runtime files + .env
           rsync -azv -e "$SSH" \
             server.js package.json package-lock.json .env \
             ${TARGET}:${REMOTE_DIR}/
 
-          # Sync .next build output (delete stale artifacts)
           rsync -azv --delete -e "$SSH" \
             --exclude='cache' \
             .next/ ${TARGET}:${REMOTE_DIR}/.next/
 
-          # Sync public assets
           [ -d public ] && rsync -azv --delete -e "$SSH" \
             public/ ${TARGET}:${REMOTE_DIR}/public/
 
-          # Install production deps and restart Passenger
           $SSH $TARGET "cd ${REMOTE_DIR} && npm install --production 2>&1 | tail -5 && touch tmp/restart.txt"
+
+  # ── On failure: create GitHub issue + assign Copilot agent ──────
+  report-failure:
+    needs: [test, deploy]
+    if: always() && (needs.test.result == 'failure' || needs.deploy.result == 'failure')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create issue or comment on existing
+        env:
+          GH_TOKEN: ${{ secrets.PERSO_GITHUB_TOKEN }}
+        run: |
+          REPO="${{ github.repository }}"
+          SHA="${{ github.sha }}"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          FAILED_JOB=""
+          [ "${{ needs.test.result }}" = "failure" ] && FAILED_JOB="test"
+          [ "${{ needs.deploy.result }}" = "failure" ] && FAILED_JOB="deploy"
+
+          TITLE="❌ CI failure: ${FAILED_JOB} — $(date -u +%Y-%m-%d)"
+
+          BODY=$(cat <<EOF
+          ## CI Pipeline Failed
+
+          | Field | Value |
+          |---|---|
+          | **Job** | \`${FAILED_JOB}\` |
+          | **Commit** | [\`${SHA:0:7}\`](${RUN_URL}) |
+          | **Run** | [View logs](${RUN_URL}) |
+          | **Trigger** | \`${{ github.event_name }}\` on \`${{ github.ref_name }}\` |
+
+          ### Next steps
+          Copilot agent has been assigned to investigate and open a fix PR.
+          EOF
+          )
+
+          EXISTING=$(gh issue list --repo "$REPO" --label ci-failure --state open --limit 1 --json number -q '.[0].number // empty' 2>/dev/null || echo "")
+
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --repo "$REPO" --body "$BODY"
+            ISSUE_NUMBER="$EXISTING"
+          else
+            ISSUE_URL=$(gh issue create --repo "$REPO" --title "$TITLE" --body "$BODY" --label "bug,ci-failure")
+            ISSUE_NUMBER=$(echo "$ISSUE_URL" | grep -oP '\d+$')
+          fi
+
+          curl -s -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}/assignees" \
+            -d "$(jq -n \
+              --arg repo "$REPO" \
+              '{
+                assignees: ["copilot-swe-agent[bot]"],
+                agent_assignment: {
+                  target_repo: $repo,
+                  base_branch: "main",
+                  custom_instructions: "Fix the failing CI. Run npm test and npm run build to reproduce. Check vitest test output and Next.js build errors. Push a fix to a new branch and open a PR."
+                }
+              }'
+            )"
