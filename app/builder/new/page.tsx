@@ -3,6 +3,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { CVContent } from "@/lib/types";
 import { EMPTY_CV_CONTENT } from "@/lib/types";
+import UpgradeModal from "@/app/components/UpgradeModal";
+import CreditsDisplay from "@/app/components/CreditsDisplay";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? "https://tatancorp.xyz/tatancorp-backend";
 
@@ -17,13 +19,24 @@ export default function NewCV() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const [plan, setPlan] = useState<"free" | "pro" | null>(null);
+    const [aiCredits, setAiCredits] = useState<number | null>(null);
+    const [aiCreditsTotal, setAiCreditsTotal] = useState(3);
     const [upgrading, setUpgrading] = useState(false);
+    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
     useEffect(() => {
         fetch(`${BACKEND}/payments/status`, { credentials: "include" })
             .then((r) => (r.ok ? r.json() : Promise.reject()))
             .then((data) => setPlan(data.plan ?? "free"))
             .catch(() => setPlan("free"));
+
+        fetch("/api/credits", { credentials: "include" })
+            .then((r) => (r.ok ? r.json() : Promise.reject()))
+            .then((data) => {
+                setAiCredits(typeof data.remaining === "number" ? data.remaining : null);
+                setAiCreditsTotal(typeof data.total === "number" ? data.total : 3);
+            })
+            .catch(() => {});
     }, []);
 
     const handleUpgrade = async () => {
@@ -83,6 +96,11 @@ export default function NewCV() {
             });
             if (!aiRes.ok) {
                 const d = await aiRes.json();
+                if (d.code === "ai_credits_exhausted" || aiRes.status === 402) {
+                    setShowUpgradeModal(true);
+                    setLoading(false);
+                    return;
+                }
                 if (d.code === "PLAN_REQUIRED") {
                     setError("AI features require Pro. Upgrade below for a one-time $9 payment.");
                     setLoading(false);
@@ -91,6 +109,9 @@ export default function NewCV() {
                 throw new Error(d.error || "AI generation failed");
             }
             const { cv }: { cv: CVContent } = await aiRes.json();
+
+            // Decrement local credits count after successful generation
+            setAiCredits((prev) => (prev !== null && prev > 0 ? prev - 1 : prev));
 
             // 2. Save to backend
             const saveRes = await fetch(`${BACKEND}/cv`, {
@@ -112,10 +133,24 @@ export default function NewCV() {
         }
     };
 
+    const freeWithCredits = plan === "free" && aiCredits !== null && aiCredits > 0;
+    const freeNoCredits = plan === "free" && aiCredits !== null && aiCredits <= 0;
+    const isAiBlocked = mode !== "blank" && freeNoCredits;
+
     return (
         <div className="mx-auto max-w-3xl px-6 py-16">
+            <UpgradeModal
+                open={showUpgradeModal}
+                onClose={() => setShowUpgradeModal(false)}
+                onUpgrade={handleUpgrade}
+                upgrading={upgrading}
+            />
+
             <div className="mb-10">
-                <h1 className="text-3xl font-bold">Create a new CV</h1>
+                <div className="flex items-center gap-3 mb-1">
+                    <h1 className="text-3xl font-bold">Create a new CV</h1>
+                    <CreditsDisplay plan={plan} remaining={aiCredits} total={aiCreditsTotal} />
+                </div>
                 <p className="text-zinc-400 text-sm mt-1">
                     AI will generate a complete, structured resume for you.
                 </p>
@@ -140,16 +175,24 @@ export default function NewCV() {
                         }`}
                     >
                         {m === "generate" ? "✦ Generate from scratch" : "↑ Improve existing"}
-                        {plan === "free" && <span className="text-[10px] opacity-60">(Pro)</span>}
+                        {freeNoCredits && <span className="text-[10px] opacity-60">(Pro)</span>}
                     </button>
                 ))}
             </div>
 
-            {/* Free user upgrade prompt for AI modes */}
-            {plan === "free" && mode !== "blank" && (
+            {/* Free user — credits remaining banner */}
+            {freeWithCredits && mode !== "blank" && (
+                <div className="mb-6 rounded-xl border border-zinc-800 bg-zinc-900/60 px-5 py-3 flex items-center gap-2 text-sm text-zinc-300">
+                    <span>🎁</span>
+                    <span>You have <strong className="text-white">{aiCredits} free AI credit{aiCredits !== 1 ? "s" : ""}</strong> remaining. Upgrade to Pro for unlimited generations.</span>
+                </div>
+            )}
+
+            {/* Free user — no credits upgrade prompt */}
+            {freeNoCredits && mode !== "blank" && (
                 <div className="mb-6 rounded-xl border border-amber-500/20 bg-amber-500/5 px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
                     <div>
-                        <p className="text-sm font-medium text-white">AI features require Pro</p>
+                        <p className="text-sm font-medium text-white">You&apos;ve used all 3 free AI credits</p>
                         <p className="text-xs text-zinc-400 mt-0.5">One-time $9 payment — unlocks AI generation, improvement, and job tailoring forever.</p>
                     </div>
                     <button
@@ -226,20 +269,25 @@ export default function NewCV() {
                     </p>
                 )}
 
-                <button
-                    onClick={handleSubmit}
-                    disabled={loading || (plan === "free" && mode !== "blank")}
-                    className="rounded-xl bg-emerald-500 px-7 py-3 text-sm font-semibold text-black transition hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed w-fit"
-                >
-                    {loading ? (
-                        <span className="flex items-center gap-2">
-                            <span className="h-3.5 w-3.5 rounded-full border-2 border-black/30 border-t-black animate-spin" />
-                            {mode === "blank" ? "Creating…" : "Generating with AI…"}
-                        </span>
-                    ) : (
-                        mode === "blank" ? "Create blank CV" : mode === "generate" ? "Generate my CV ✦" : "Improve my CV ↑"
+                <div className="flex items-center gap-4">
+                    <button
+                        onClick={handleSubmit}
+                        disabled={loading || isAiBlocked}
+                        className="rounded-xl bg-emerald-500 px-7 py-3 text-sm font-semibold text-black transition hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed w-fit"
+                    >
+                        {loading ? (
+                            <span className="flex items-center gap-2">
+                                <span className="h-3.5 w-3.5 rounded-full border-2 border-black/30 border-t-black animate-spin" />
+                                {mode === "blank" ? "Creating…" : "Generating with AI…"}
+                            </span>
+                        ) : (
+                            mode === "blank" ? "Create blank CV" : mode === "generate" ? "Generate my CV ✦" : "Improve my CV ↑"
+                        )}
+                    </button>
+                    {mode !== "blank" && freeWithCredits && (
+                        <span className="text-xs text-zinc-500">{aiCredits} credit{aiCredits !== 1 ? "s" : ""} left</span>
                     )}
-                </button>
+                </div>
             </div>
         </div>
     );

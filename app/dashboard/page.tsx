@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import type { CV } from "@/lib/types";
+import CreditsDisplay from "@/app/components/CreditsDisplay";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? "https://tatancorp.xyz/tatancorp-backend";
 
@@ -17,6 +18,8 @@ export default function Dashboard() {
     const [loading, setLoading] = useState(true);
     const [deleting, setDeleting] = useState<string | null>(null);
     const [plan, setPlan] = useState<"free" | "pro" | null>(null);
+    const [aiCredits, setAiCredits] = useState<number | null>(null);
+    const [aiCreditsTotal, setAiCreditsTotal] = useState(3);
     const [upgrading, setUpgrading] = useState(false);
     const justUpgraded = searchParams.get("upgraded") === "1";
 
@@ -35,6 +38,14 @@ export default function Dashboard() {
             .then((r) => (r.ok ? r.json() : Promise.reject()))
             .then((data) => setPlan(data.plan ?? "free"))
             .catch(() => setPlan("free"));
+
+        fetch("/api/credits", { credentials: "include" })
+            .then((r) => (r.ok ? r.json() : Promise.reject()))
+            .then((data) => {
+                setAiCredits(typeof data.remaining === "number" ? data.remaining : null);
+                setAiCreditsTotal(typeof data.total === "number" ? data.total : 3);
+            })
+            .catch(() => {});
 
         // Auto-trigger checkout if redirected with ?upgrade=1
         if (searchParams.get("upgrade") === "1" && !justUpgraded) {
@@ -108,13 +119,16 @@ export default function Dashboard() {
                     <div className="flex items-center gap-3">
                         <h1 className="text-3xl font-bold">Your CVs</h1>
                         {plan && (
-                            <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                                plan === "pro"
-                                    ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
-                                    : "bg-zinc-800 text-zinc-400 border border-zinc-700"
-                            }`}>
-                                {plan === "pro" ? "✦ Pro" : "Free"}
-                            </span>
+                            <>
+                                <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                                    plan === "pro"
+                                        ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                                        : "bg-zinc-800 text-zinc-400 border border-zinc-700"
+                                }`}>
+                                    {plan === "pro" ? "✦ Pro" : "Free"}
+                                </span>
+                                <CreditsDisplay plan={plan} remaining={aiCredits} total={aiCreditsTotal} />
+                            </>
                         )}
                     </div>
                     <p className="text-zinc-400 text-sm mt-1">{cvs.length} saved resume{cvs.length !== 1 ? "s" : ""}</p>

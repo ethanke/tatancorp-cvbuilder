@@ -17,3 +17,24 @@ export async function getUserPlan(cookie: string): Promise<"pro" | "free"> {
     return "free";
   }
 }
+
+/**
+ * Get remaining AI credits for free users.
+ * Returns { remaining, total } — pro users have unlimited (remaining = -1).
+ */
+export async function getUserAiCredits(cookie: string): Promise<{ remaining: number; total: number }> {
+  try {
+    const res = await fetch(`${BACKEND}/payments/ai/credits`, {
+      headers: { cookie },
+      cache: "no-store",
+    });
+    if (!res.ok) return { remaining: 0, total: 3 };
+    const data = await res.json();
+    return {
+      remaining: typeof data.remaining === "number" ? data.remaining : 0,
+      total: typeof data.total === "number" ? data.total : 3,
+    };
+  } catch {
+    return { remaining: 0, total: 3 };
+  }
+}

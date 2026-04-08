@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import type { CV, CVContent, CVExperience, CVEducation, CVProject } from "@/lib/types";
 import CvPreview from "@/app/components/CvPreview";
+import UpgradeModal from "@/app/components/UpgradeModal";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? "https://tatancorp.xyz/tatancorp-backend";
 
@@ -57,6 +58,10 @@ export default function BuilderEditor() {
     const [tailoring, setTailoring] = useState(false);
     const [tailorError, setTailorError] = useState("");
     const [plan, setPlan] = useState<"free" | "pro" | null>(null);
+    const [aiCredits, setAiCredits] = useState<number | null>(null);
+    const [aiCreditsTotal, setAiCreditsTotal] = useState(3);
+    const [upgrading, setUpgrading] = useState(false);
+    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
     const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
@@ -69,6 +74,14 @@ export default function BuilderEditor() {
             .then((r) => (r.ok ? r.json() : Promise.reject()))
             .then((data) => setPlan(data.plan ?? "free"))
             .catch(() => setPlan("free"));
+
+        fetch("/api/credits", { credentials: "include" })
+            .then((r) => (r.ok ? r.json() : Promise.reject()))
+            .then((data) => {
+                setAiCredits(typeof data.remaining === "number" ? data.remaining : null);
+                setAiCreditsTotal(typeof data.total === "number" ? data.total : 3);
+            })
+            .catch(() => {});
     }, [id, router]);
 
     const doSave = useCallback((c: CVContent) => {
@@ -106,6 +119,12 @@ export default function BuilderEditor() {
             });
             const data = await res.json();
             if (!res.ok) {
+                if (data.code === "ai_credits_exhausted" || res.status === 402) {
+                    setTailorOpen(false);
+                    setShowUpgradeModal(true);
+                    setTailoring(false);
+                    return;
+                }
                 if (data.code === "PLAN_REQUIRED") {
                     setTailorError("AI features require Pro — upgrade from your dashboard for $9.");
                     setTailoring(false);
@@ -113,6 +132,8 @@ export default function BuilderEditor() {
                 }
                 throw new Error(data.error || "Tailor failed");
             }
+            // Decrement local credits count after successful tailor
+            setAiCredits((prev) => (prev !== null && prev > 0 ? prev - 1 : prev));
             if (data.newId) {
                 router.push(`/builder/${data.newId}`);
             }
@@ -121,6 +142,16 @@ export default function BuilderEditor() {
         } finally {
             setTailoring(false);
         }
+    };
+
+    const handleUpgrade = async () => {
+        setUpgrading(true);
+        try {
+            const res = await fetch("/api/checkout", { method: "POST" });
+            const data = await res.json();
+            if (data.url) window.location.href = data.url;
+        } catch { /* ignore */ }
+        setUpgrading(false);
     };
 
     if (!cv || !content) {
@@ -136,6 +167,12 @@ export default function BuilderEditor() {
 
     return (
         <div className="flex flex-col h-[calc(100vh-65px)]">
+            <UpgradeModal
+                open={showUpgradeModal}
+                onClose={() => setShowUpgradeModal(false)}
+                onUpgrade={handleUpgrade}
+                upgrading={upgrading}
+            />
             {/* ── Top bar ───────────────────────────────────────────────── */}
             <div className="print:hidden flex items-center gap-4 px-6 py-3 border-b border-zinc-800 bg-[#09090b]/80 backdrop-blur-md shrink-0">
                 <div className="flex-1 min-w-0">
@@ -158,11 +195,19 @@ export default function BuilderEditor() {
                     }`}>
                     {saveStatus === "saved" ? "✓ Saved" : saveStatus === "saving" ? "Saving…" : "Unsaved"}
                 </span>
+                {plan === "free" && aiCredits !== null && (
+                    <span className={`text-xs shrink-0 ${aiCredits > 0 ? "text-zinc-400" : "text-red-400"}`}>
+                        {aiCredits}/{aiCreditsTotal} AI credits
+                    </span>
+                )}
+                {plan === "pro" && (
+                    <span className="text-xs shrink-0 text-emerald-500">✦ AI: Unlimited</span>
+                )}
                 <button
                     onClick={() => setTailorOpen(true)}
                     className="shrink-0 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs font-medium hover:bg-zinc-800 transition"
                 >
-                    ⌖ Tailor to job {plan === "free" && <span className="text-zinc-500">(Pro)</span>}
+                    ⌖ Tailor to job {plan === "free" && aiCredits !== null && aiCredits <= 0 && <span className="text-zinc-500">(Pro)</span>}
                 </button>
                 <button
                     onClick={() => window.print()}
