@@ -181,6 +181,8 @@ export default function BuilderEditor() {
         );
     }
 
+    const creditsExhausted = plan === "free" && credits !== null && credits.remaining <= 0;
+
     return (
         <div className="flex flex-col h-[calc(100vh-65px)]">
             {showUpgradeModal && <UpgradeModal onClose={() => setShowUpgradeModal(false)} />}
@@ -219,7 +221,7 @@ export default function BuilderEditor() {
                     onClick={() => setTailorOpen(true)}
                     className="shrink-0 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs font-medium hover:bg-zinc-800 transition"
                 >
-                    ⌖ Tailor to job {plan === "free" && credits !== null && credits.remaining <= 0 && <span className="text-zinc-500">(no credits)</span>}
+                    ⌖ Tailor to job {creditsExhausted && <span className="text-zinc-500">(no credits)</span>}
                 </button>
                 <button
                     onClick={() => router.push(`/builder/${id}/cover-letter`)}

@@ -31,6 +31,8 @@ export async function getUserPlan(cookie: string): Promise<PlanType> {
 /**
  * Fetch remaining AI credits for the user (free tier).
  * Returns { remaining, total, used }.
+ * Falls back to { remaining: 0, total: 3, used: 3 } on network errors or non-ok responses,
+ * which safely blocks further AI usage until the backend is reachable.
  */
 export async function getUserAiCredits(cookie: string): Promise<AiCredits> {
   try {
