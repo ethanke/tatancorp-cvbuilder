@@ -16,20 +16,31 @@ export default function NewCV() {
     const [targetRole, setTargetRole] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
-    const [plan, setPlan] = useState<"free" | "pro" | null>(null);
+    const [plan, setPlan] = useState<"free" | "monthly" | "annual" | null>(null);
     const [upgrading, setUpgrading] = useState(false);
 
     useEffect(() => {
         fetch(`${BACKEND}/payments/status`, { credentials: "include" })
             .then((r) => (r.ok ? r.json() : Promise.reject()))
-            .then((data) => setPlan(data.plan ?? "free"))
+            .then((data) => {
+                const p = data.plan;
+                if (p === "monthly" || p === "annual") {
+                    setPlan(p);
+                } else {
+                    setPlan("free");
+                }
+            })
             .catch(() => setPlan("free"));
     }, []);
 
     const handleUpgrade = async () => {
         setUpgrading(true);
         try {
-            const res = await fetch("/api/checkout", { method: "POST" });
+            const res = await fetch("/api/checkout", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ plan: "annual" }),
+            });
             const data = await res.json();
             if (data.url) window.location.href = data.url;
         } catch { /* ignore */ }
@@ -84,7 +95,7 @@ export default function NewCV() {
             if (!aiRes.ok) {
                 const d = await aiRes.json();
                 if (d.code === "PLAN_REQUIRED") {
-                    setError("AI features require Pro. Upgrade below for a one-time $9 payment.");
+                    setError("AI features require Pro. Upgrade below — $5/month or $49/year.");
                     setLoading(false);
                     return;
                 }
@@ -150,14 +161,14 @@ export default function NewCV() {
                 <div className="mb-6 rounded-xl border border-amber-500/20 bg-amber-500/5 px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
                     <div>
                         <p className="text-sm font-medium text-white">AI features require Pro</p>
-                        <p className="text-xs text-zinc-400 mt-0.5">One-time $9 payment — unlocks AI generation, improvement, and job tailoring forever.</p>
+                        <p className="text-xs text-zinc-400 mt-0.5">Subscribe to Pro to unlock AI generation, improvement, and job tailoring — $5/month or $49/year.</p>
                     </div>
                     <button
                         onClick={handleUpgrade}
                         disabled={upgrading}
                         className="rounded-xl bg-emerald-500 px-5 py-2 text-sm font-semibold text-black transition hover:bg-emerald-400 disabled:opacity-50 whitespace-nowrap"
                     >
-                        {upgrading ? "Redirecting…" : "Upgrade to Pro — $9"}
+                        {upgrading ? "Redirecting…" : "Upgrade to Pro — $49/yr"}
                     </button>
                 </div>
             )}

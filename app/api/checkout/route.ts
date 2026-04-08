@@ -6,6 +6,15 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://cvbuilder.tatancorp.
 export async function POST(req: NextRequest) {
   const cookie = req.headers.get("cookie") ?? "";
 
+  // Parse plan from request body (default to "annual")
+  let plan: "monthly" | "annual" = "annual";
+  try {
+    const body = await req.json();
+    if (body.plan === "monthly" || body.plan === "annual") {
+      plan = body.plan;
+    }
+  } catch { /* ignore parse errors, use default */ }
+
   // Check auth
   const meRes = await fetch(`${BACKEND}/auth/me`, {
     headers: { cookie },
@@ -15,14 +24,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "not authenticated" }, { status: 401 });
   }
 
-  // Check if already pro
+  // Check if already subscribed
   const statusRes = await fetch(`${BACKEND}/payments/status`, {
     headers: { cookie },
     cache: "no-store",
   });
   if (statusRes.ok) {
-    const { plan } = await statusRes.json();
-    if (plan === "pro") {
+    const { plan: currentPlan } = await statusRes.json();
+    if (currentPlan === "monthly" || currentPlan === "annual") {
       return NextResponse.json({ error: "already_pro" }, { status: 400 });
     }
   }
@@ -32,6 +41,7 @@ export async function POST(req: NextRequest) {
     method: "POST",
     headers: { "Content-Type": "application/json", cookie },
     body: JSON.stringify({
+      plan,
       success_url: `${APP_URL}/dashboard?upgraded=1`,
       cancel_url: `${APP_URL}/dashboard`,
     }),

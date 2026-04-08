@@ -1,3 +1,5 @@
+"use client";
+import { useState } from "react";
 import Link from "next/link";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? "https://tatancorp.xyz/tatancorp-backend";
@@ -26,6 +28,8 @@ const features = [
 ];
 
 export default function LandingPage() {
+    const [billing, setBilling] = useState<"monthly" | "annual">("annual");
+
     return (
         <div className="mx-auto max-w-6xl px-6 py-20 flex flex-col gap-24">
 
@@ -113,8 +117,37 @@ export default function LandingPage() {
             <section id="pricing" className="flex flex-col gap-8">
                 <div className="text-center">
                     <h2 className="text-3xl font-bold">Simple pricing</h2>
-                    <p className="text-zinc-400 text-sm mt-2">Start free. Unlock AI when you&apos;re ready — one payment, forever.</p>
+                    <p className="text-zinc-400 text-sm mt-2">Start free. Unlock AI when you&apos;re ready.</p>
                 </div>
+
+                {/* Billing toggle */}
+                <div className="flex items-center justify-center gap-3">
+                    <span className={`text-sm font-medium transition ${billing === "monthly" ? "text-white" : "text-zinc-500"}`}>
+                        Monthly
+                    </span>
+                    <button
+                        onClick={() => setBilling(billing === "monthly" ? "annual" : "monthly")}
+                        aria-label="Toggle billing period"
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                            billing === "annual" ? "bg-emerald-500" : "bg-zinc-700"
+                        }`}
+                    >
+                        <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                                billing === "annual" ? "translate-x-6" : "translate-x-1"
+                            }`}
+                        />
+                    </button>
+                    <span className={`text-sm font-medium transition ${billing === "annual" ? "text-white" : "text-zinc-500"}`}>
+                        Annual
+                    </span>
+                    {billing === "annual" && (
+                        <span className="rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 text-xs font-semibold text-emerald-400">
+                            Save ~18%
+                        </span>
+                    )}
+                </div>
+
                 <div className="grid sm:grid-cols-2 gap-5 max-w-3xl mx-auto w-full">
                     {/* Free */}
                     <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6 flex flex-col gap-4">
@@ -123,8 +156,8 @@ export default function LandingPage() {
                         <ul className="text-sm text-zinc-300 flex flex-col gap-2 mt-2">
                             <li className="flex items-center gap-2"><span className="text-emerald-400">✓</span> Create &amp; edit CVs manually</li>
                             <li className="flex items-center gap-2"><span className="text-emerald-400">✓</span> Export to PDF</li>
-                            <li className="flex items-center gap-2"><span className="text-emerald-400">✓</span> Unlimited CVs</li>
-                            <li className="flex items-center gap-2"><span className="text-zinc-600">✗</span><span className="text-zinc-500">AI generation</span></li>
+                            <li className="flex items-center gap-2"><span className="text-emerald-400">✓</span> 3 AI credits to try</li>
+                            <li className="flex items-center gap-2"><span className="text-zinc-600">✗</span><span className="text-zinc-500">Unlimited AI generations</span></li>
                             <li className="flex items-center gap-2"><span className="text-zinc-600">✗</span><span className="text-zinc-500">AI improve &amp; tailor</span></li>
                         </ul>
                         <a
@@ -134,28 +167,44 @@ export default function LandingPage() {
                             Get started
                         </a>
                     </div>
+
                     {/* Pro */}
                     <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/5 p-6 flex flex-col gap-4 relative">
-                        <div className="absolute -top-3 right-5 rounded-full bg-emerald-500 px-3 py-0.5 text-xs font-semibold text-black">
-                            Best value
-                        </div>
-                        <p className="text-xs text-emerald-400 uppercase tracking-widest font-medium">Pro — Lifetime</p>
+                        {billing === "annual" && (
+                            <div className="absolute -top-3 right-5 rounded-full bg-emerald-500 px-3 py-0.5 text-xs font-semibold text-black">
+                                Best value
+                            </div>
+                        )}
+                        <p className="text-xs text-emerald-400 uppercase tracking-widest font-medium">
+                            {billing === "annual" ? "Pro — Annual" : "Pro — Monthly"}
+                        </p>
                         <div className="flex items-baseline gap-1">
-                            <span className="text-4xl font-bold text-white">$9</span>
-                            <span className="text-sm text-zinc-500">one-time</span>
+                            {billing === "annual" ? (
+                                <>
+                                    <span className="text-4xl font-bold text-white">$49</span>
+                                    <span className="text-sm text-zinc-500">/year</span>
+                                </>
+                            ) : (
+                                <>
+                                    <span className="text-4xl font-bold text-white">$5</span>
+                                    <span className="text-sm text-zinc-500">/month</span>
+                                </>
+                            )}
                         </div>
                         <ul className="text-sm text-zinc-300 flex flex-col gap-2 mt-2">
                             <li className="flex items-center gap-2"><span className="text-emerald-400">✓</span> Everything in Free</li>
                             <li className="flex items-center gap-2"><span className="text-emerald-400">✓</span> AI-generated CVs from a bio</li>
                             <li className="flex items-center gap-2"><span className="text-emerald-400">✓</span> AI improve existing CVs</li>
                             <li className="flex items-center gap-2"><span className="text-emerald-400">✓</span> Tailor to any job description</li>
-                            <li className="flex items-center gap-2"><span className="text-emerald-400">✓</span> Lifetime access — no subscription</li>
+                            <li className="flex items-center gap-2"><span className="text-emerald-400">✓</span> Unlimited AI generations</li>
                         </ul>
                         <a
-                            href={`${BACKEND}/auth/login?next=${encodeURIComponent("https://cvbuilder.tatancorp.xyz/dashboard?upgrade=1")}`}
+                            href={`${BACKEND}/auth/login?next=${encodeURIComponent(
+                                `https://cvbuilder.tatancorp.xyz/dashboard?upgrade=1&plan=${billing}`
+                            )}`}
                             className="mt-auto rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-black text-center transition hover:bg-emerald-400"
                         >
-                            Unlock AI — $9
+                            {billing === "annual" ? "Unlock AI — $49/yr" : "Unlock AI — $5/mo"}
                         </a>
                     </div>
                 </div>

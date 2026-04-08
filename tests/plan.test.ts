@@ -10,17 +10,26 @@ beforeEach(() => {
 });
 
 describe("getUserPlan", () => {
-  it("returns 'pro' when backend says pro", async () => {
+  it("returns 'monthly' when backend says monthly", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ plan: "pro" }),
+      json: async () => ({ plan: "monthly" }),
     });
     const plan = await getUserPlan("tc_session=abc123");
-    expect(plan).toBe("pro");
+    expect(plan).toBe("monthly");
     expect(mockFetch).toHaveBeenCalledOnce();
     // Verify cookie was forwarded
     const call = mockFetch.mock.calls[0];
     expect(call[1].headers.cookie).toBe("tc_session=abc123");
+  });
+
+  it("returns 'annual' when backend says annual", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ plan: "annual" }),
+    });
+    const plan = await getUserPlan("tc_session=abc123");
+    expect(plan).toBe("annual");
   });
 
   it("returns 'free' when backend says free", async () => {

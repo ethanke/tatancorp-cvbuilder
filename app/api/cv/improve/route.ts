@@ -44,8 +44,8 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "not authenticated" }, { status: 401 });
 
   const plan = await getUserPlan(cookie);
-  if (plan !== "pro") {
-    return NextResponse.json({ error: "AI features require Pro. Upgrade for a one-time fee.", code: "PLAN_REQUIRED" }, { status: 403 });
+  if (plan !== "monthly" && plan !== "annual") {
+    return NextResponse.json({ error: "AI features require a Pro subscription ($5/month or $49/year).", code: "PLAN_REQUIRED" }, { status: 403 });
   }
 
   const now = Date.now();
