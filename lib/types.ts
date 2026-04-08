@@ -56,3 +56,9 @@ export const EMPTY_CV_CONTENT: CVContent = {
   skills: [],
   projects: [],
 };
+
+export interface CoverLetter {
+  greeting: string;
+  paragraphs: string[];
+  closing: string;
+}
