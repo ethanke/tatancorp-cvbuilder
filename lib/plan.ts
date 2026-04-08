@@ -1,10 +1,12 @@
 const BACKEND = process.env.BACKEND_URL ?? "https://tatancorp.xyz/tatancorp-backend";
 
+export type PlanType = "free" | "monthly" | "annual";
+
 /**
- * Check if user has the "pro" plan (paid one-time for AI access).
- * Returns "pro" | "free".
+ * Check the user's subscription plan.
+ * Returns "monthly" | "annual" | "free".
  */
-export async function getUserPlan(cookie: string): Promise<"pro" | "free"> {
+export async function getUserPlan(cookie: string): Promise<PlanType> {
   try {
     const res = await fetch(`${BACKEND}/payments/status`, {
       headers: { cookie },
@@ -12,7 +14,9 @@ export async function getUserPlan(cookie: string): Promise<"pro" | "free"> {
     });
     if (!res.ok) return "free";
     const data = await res.json();
-    return data.plan === "pro" ? "pro" : "free";
+    if (data.plan === "monthly") return "monthly";
+    if (data.plan === "annual") return "annual";
+    return "free";
   } catch {
     return "free";
   }
