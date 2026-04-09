@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { getUserPlan, getUserAiCredits } from "../lib/plan";
+import { getUserPlan, getUserAiCredits } from "../src/lib/plan";
 
 // Mock global fetch
 const mockFetch = vi.fn();

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import type { CVContent, CV, CoverLetter } from "../lib/types";
-import { EMPTY_CV_CONTENT } from "../lib/types";
+import type { CVContent, CV, CoverLetter } from "../src/lib/types";
+import { EMPTY_CV_CONTENT } from "../src/lib/types";
 
 describe("types", () => {
   it("EMPTY_CV_CONTENT has all required fields", () => {
