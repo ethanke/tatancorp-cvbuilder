@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractJson } from "../lib/extract-json";
+import { extractJson } from "../src/lib/extract-json";
 
 describe("extractJson", () => {
   it("parses plain JSON string", () => {
